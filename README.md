@@ -72,36 +72,89 @@ A self-hosted notes application inspired by Google Keep. Create, edit, organize,
 - CORS with origin control
 - Session management with express-session
 
-## Quick Start with Docker (Recommended)
+## Quick Start with Docker
 
-The easiest way to run KeepLocal is using Docker Compose:
+### 1. Create a project directory
 
-### Prerequisites
-- Docker
-- Docker Compose
+```bash
+mkdir -p ~/keeplocal/data/db ~/keeplocal/data/uploads
+cd ~/keeplocal
+```
 
-### Installation
+### 2. Create `.env`
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/zwaetschge/KeepLocal.git
-   cd KeepLocal
-   ```
+`JWT_SECRET` is required and must be at least 32 characters.
 
-2. **Start with Docker Compose**
-   ```bash
-   docker-compose up -d
-   ```
+```bash
+cat > .env <<EOF
+JWT_SECRET=$(openssl rand -base64 48)
+ALLOWED_ORIGINS=http://127.0.0.1:3000,http://localhost:3000,http://YOUR_SERVER_IP:3000
+EOF
+```
 
-3. **Access the application**
+Replace `YOUR_SERVER_IP` with your server LAN IP or public hostname.
 
-   Open your browser and navigate to: `http://localhost:3000`
+### 3. Create `docker-compose.yml`
 
-That's it! The application will automatically:
-- Set up MongoDB
-- Configure the backend server
-- Build and serve the frontend
-- Handle all networking between services
+```yaml
+version: "2"
+
+services:
+  keeplocal:
+    image: valentin2177/keeplocal:latest
+    container_name: keeplocal
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      MONGODB_URI: mongodb://localhost:27017/keeplocal
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      AI_SERVICE_URL: http://localhost:5001
+      WHISPER_MODEL: tiny
+    volumes:
+      - ./data/db:/data/db
+      - ./data/uploads:/app/server/uploads
+```
+
+For Ubuntu 18.04, older Docker, or older kernels, add this under the service if MongoDB/Node crash with `Operation not permitted` or `uv_thread_create` errors:
+
+```yaml
+    security_opt:
+      - seccomp=unconfined
+```
+
+### 4. Start
+
+```bash
+docker-compose up -d
+```
+
+### 5. Verify
+
+```bash
+docker logs --tail=100 keeplocal
+curl http://127.0.0.1:3000/api/health
+```
+
+Open:
+
+`http://YOUR_SERVER_IP:3000`
+
+---
+
+## Bottom Line
+
+The docs should not imply that `docker-compose up -d` alone is sufficient. Real-world setup requires:
+
+1. Create `.env`.
+2. Generate `JWT_SECRET`.
+3. Set `ALLOWED_ORIGINS` for the actual access URL.
+4. Use persistent volumes/bind mounts for MongoDB and uploads.
+5. On Ubuntu 18.04 or older Docker hosts, add `security_opt: seccomp=unconfined` if MongoDB/Node crash during thread creation.
+6. Treat language selection as browser-driven unless the app language selector is fixed.
 
 ### Docker Commands
 
@@ -272,9 +325,9 @@ After installation, you may need to update the CORS settings:
 3. Your preference is automatically saved
 
 ### Language Selection
-1. Click the language selector (🇩🇪/🇬🇧)
-2. Choose between German and English
-3. All UI text updates instantly
+1. The app currently follows browser language by default (English/German).
+2. If browser locale changes, the app updates on next `languagechange` event/reload.
+3. The in-app language selector may not override language until it is fixed in code.
 
 ### Keyboard Shortcuts
 - `Ctrl+N`: Focus on new note input
